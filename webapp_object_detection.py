@@ -1,16 +1,23 @@
 import streamlit as st
 import os
+import pandas as pd
+import numpy as np
 
-# Set up a title for the web app
+st.set_page_config(
+    page_title="Web app",
+    layout="wide"
+)
+
+# title for the web app
 st.title("File Uploader")
 
 
-# Function to upload file
+# Upload file
 def upload_file():
     uploaded_file = st.file_uploader("Choose a file")
     if uploaded_file is not None:
         try:
-            # Get the absolute path to the "images" folder
+            # path to the "images" folder
             images_folder = os.path.abspath("images_111")
             st.write("Absolute path to 'images' folder:", images_folder)
 
@@ -19,7 +26,7 @@ def upload_file():
                 st.error("Error: 'images' folder does not exist.")
                 return
 
-            # Save the file to the "images" folder on the web server
+            # Save the file to the "images" folder
             file_path = os.path.join(images_folder, uploaded_file.name)
             st.write("Saving file to:", file_path)
             with open(file_path, "wb") as f:
@@ -28,13 +35,17 @@ def upload_file():
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
 
+
 def folder_exists(folder_path):
     return os.path.exists(folder_path) and os.path.isdir(folder_path)
+
+
 def check_folder():
     if folder_exists("images"):
         print("The 'images' folder exists.")
     else:
         print("The 'images' folder does not exist.")
+
 
 if st.button("Check Folder"):
     check_folder()
