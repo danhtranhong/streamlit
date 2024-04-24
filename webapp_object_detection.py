@@ -1,55 +1,37 @@
 import streamlit as st
 import os
-import pandas as pd
-import numpy as np
-
-st.set_page_config(
-    page_title="Web app",
-    layout="wide"
-)
-
-# title for the web app
-st.title("File Uploader")
+from PIL import Image
 
 
-# Upload file
-def upload_file():
-    uploaded_file = st.file_uploader("Choose a file")
-    if uploaded_file is not None:
-        try:
-            # path to the "images" folder
-            images_folder = os.path.abspath("images_111")
-            st.write("Absolute path to 'images' folder:", images_folder)
-
-            # Check if the folder exists
-            if not os.path.exists(images_folder):
-                st.error("Error: 'images' folder does not exist.")
-                return
-
-            # Save the file to the "images" folder
-            file_path = os.path.join(images_folder, uploaded_file.name)
-            st.write("Saving file to:", file_path)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            st.success("File uploaded successfully!")
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+# Function to save uploaded image to server
+def save_uploaded_file(uploaded_file):
+    os.makedirs("uploads", exist_ok=True)
+    # Save the file with the uploads directory
+    with open(os.path.join("uploads", uploaded_file.name), "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return st.success("File saved successfully")
 
 
-def folder_exists(folder_path):
-    return os.path.exists(folder_path) and os.path.isdir(folder_path)
+def main():
+    st.title("Upload File")
 
+    menu = ["Upload Image", "About"]
+    choice = st.sidebar.selectbox("Menu", menu)
+    if choice == "Upload Image":
+        st.subheader("Home")
+        image_file = st.file_uploader("Upload Image", type=['png', 'jpeg', 'jpg'])
+        if image_file is not None:
+            # Display uploaded image
+            st.image(image_file, caption="Uploaded Image", use_column_width=True)
+            # Save the uploaded file
+            save_button = st.button("Save File")
+            if save_button:
+                save_uploaded_file(image_file)
 
-def check_folder():
-    if folder_exists("images"):
-        print("The 'images' folder exists.")
     else:
-        print("The 'images' folder does not exist.")
+        st.subheader("About")
+        st.info("Testing Streamlit app")
 
 
-if st.button("Check Folder"):
-    check_folder()
-
-# Button to upload file
-if st.button("Upload File"):
-    upload_file()
+if __name__ == '__main__':
+    main()
