@@ -29,11 +29,12 @@ def save_uploaded_file(uploaded_file, session_uuid):
 
 def connect_to_db():
     connection = psycopg2.connect(
-        host='',
+        #host='database-1.chqug9auzx3l.us-east-1.rds.amazonaws.com',
+        host='localhost',
         port=5432,
-        database='postgres',
+        database='capstone',
         user='postgres',
-        password=''
+        password='12345trewq'
     )
     return connection
 
@@ -41,21 +42,19 @@ def connect_to_db():
 # Function to check the database status
 def check_database_status():
     try:
-        connection = connect_to_db()
-        cursor = connection.cursor()
-
+        conn = connect_to_db()
+        cursor = conn.cursor()
         # Execute a sample query to check the status
         cursor.execute("SELECT 1;")
         result = cursor.fetchone()
-
         return f"Database status: Connected, Result: {result[0]}"
 
     except Exception as e:
         return f"Database status: Error - {str(e)}"
 
     finally:
-        if connection:
-            connection.close()
+        if conn:
+            conn.close()
 
 
 def update_database(filename):
@@ -69,8 +68,6 @@ def update_database(filename):
             sql.Literal(filename)
         )
         cursor.execute(insert_query)
-
-        # Commit the changes to the database
         connection.commit()
 
     except Exception as e:
@@ -88,15 +85,47 @@ def get_trained_model(folder_path):
 
 
 def get_latest_prediction(path):
-    #path = 'runs/detect'
+    # path = 'runs/detect'
     folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
     newest_folder = max(folders, key=lambda x: os.path.getctime(os.path.join(path, x)))
     return newest_folder
 
 
+def update_database2(session_id, filename, predicted_value):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+
+        insert_query = sql.SQL("INSERT INTO test2 (uuid, filename, predicted_value) VALUES (%s, %s, %s)")
+        cursor.execute(insert_query, (session_id, filename, predicted_value))
+
+        connection.commit()
+    except Exception as e:
+        print(f"Error updating database: {str(e)}")
+    finally:
+        if connection:
+            connection.close()
+
+
+def update_truth_variable(truth_var, session_id):
+    try:
+        connection = connect_to_db()  # Assuming you have a function to establish the connection
+        cursor = connection.cursor()
+        update_query = sql.SQL("UPDATE result SET truth = %s WHERE uuid= %s")
+        cursor.execute(update_query, (truth_var, session_id))
+        connection.commit()
+    except Exception as e:
+        print(f"Error updating database: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
 def main():
     st.title("Streamlit Webapp")
-    menu = ["Upload Image", "Check DBConnection", "Yolov8", "About"]
+    menu = ["Upload Image", "Yolov8", "Update Database", "Train Model", "About"]
     choice = st.sidebar.selectbox("Menu", menu)
     # Generate a unique session ID
     session_id = str(uuid.uuid4())
@@ -120,17 +149,33 @@ def main():
                 else:
                     print("File save failed.")
 
-    elif choice == "Check DBConnection":
+    elif choice == "Update Database":
         st.subheader("Database Connection")
+        if "update_executed" not in st.session_state:
+            st.session_state.update_executed = False
+
         db_status = check_database_status()
         st.write(db_status)
+#       st.info("Update Truth variable")
 
+        st.info("Verify your prediction result, correct = 1, wrong = 0")
+        truth_var = st.text_input("correct = 1, wrong = 0")
+        st.write("truth value", truth_var)
+        session_id = st.text_input("UUID:")
+        st.write("UUID", session_id)
+        time.sleep(10)
+        if st.button("Update Truth Variable"):
+            if not st.session_state.update_executed:
+                update_truth_variable(truth_var, session_id)
+                st.session_state.update_executed = True
+                st.success("Truth variable updated!")
     elif choice == "Yolov8":
         st.subheader("Waste detection by Yolov8")
         training_result_path = "waste-detection/training_results/"  # Specify the path to your directory here
-        #session_id = str(uuid.uuid4())
+        # session_id = str(uuid.uuid4())
 
-        selected_model = st.selectbox("Select a folder", get_trained_model(training_result_path))   # choose model format  train_<numb>batch_<numb>epoch
+        selected_model = st.selectbox("Select a folder", get_trained_model(
+            training_result_path))  # choose model format  train_<numb>batch_<numb>epoch
         st.write(f"You selected: {selected_model}")
 
         if 'file_uploaded' not in st.session_state:
@@ -158,7 +203,7 @@ def main():
                     print("File save failed. Cannot proceed with detection.")
                     exit(1)
             if st.session_state.file_uploaded:
-                st.info("Ready to run prediction")
+
                 # Perform detection
                 yolo = YOLO(f'{training_result_path}{selected_model}/weights/best.pt')
                 # Create a subfolder for predictions
@@ -172,16 +217,54 @@ def main():
 
                 if os.path.exists(session_prediction_folder):
                     print("Folder created successfully:", session_prediction_folder)
-                    detection = yolo.predict(source=source_predict, save=True, conf=0.01, project=session_prediction_folder)  # Save predictions in session folder
+                    st.info("Ready to run prediction")
+                    if st.button('Detect Objects'):
+                        detection = yolo.predict(source=source_predict, save=True, conf=0.01,
+                                                 project=session_prediction_folder)  # Save predictions in session folder
+                        for result in detection:
+                            if result:
+                                boxes = result.boxes
+                                #class_prob = result.probs
+                                # st.write("boxes:", boxes)  # names: {0: 'organic', 1: 'landfill', 2: 'plastic', 3: 'refundable'}
+                                for box in boxes:
+                                    if box:
+                                        if box.cls == 0:
+                                            st.info("organic")
+                                            st.write(box.cls.item())
+                                            class_object = "Organic"
+                                            st.info("Confidence")
+                                            predicted_value = round(box.conf.item(), 3)
+                                            st.write(predicted_value)
+                                        elif box.cls == 1:
+                                            st.info("landfill")
+                                            st.write(box.cls.item())
+                                            class_object = "Landfill"
+                                            st.info("Confidence")
+                                            predicted_value = round(box.conf.item(), 3)
+                                            st.write(predicted_value)
+                                        elif box.cls == 2:
+                                            st.info("Plastic")
+                                            st.write(box.cls.item())
+                                            class_object = "Plastic"
+                                            st.info("Confidence")
+                                            predicted_value = round(box.conf.item(), 3)
+                                            st.write(predicted_value)
+                                        else:
+                                            st.info("Refundable")
+                                            st.write(box.cls.item())
+                                            class_object = "Refundable"
+                                            st.info("Confidence")
+                                            predicted_value = round(box.conf.item(), 3)
+                                            st.write(predicted_value)
+                    else:
+                        st.info("Please hit the button to run prediction")
                 else:
                     print("Folder creation failed:", session_prediction_folder)
 
-                st.write("Detection Result:")
-
+                update_database2(session_id, image_file.name, predicted_value)
+                st.info("Detection Result")
                 time.sleep(5)
-                # Retrieve prediction results from the session-specific folder
-                #predict_path = get_latest_prediction('runs/detect')
-                # st.info('The prediction result:' + predict_path)
+
                 prediction_result_folder = os.path.join('runs', 'detect', session_id, 'predict')
                 image_filenames = [filename for filename in os.listdir(prediction_result_folder) if
                                    filename.lower().endswith(('.png', '.jpg', '.jpeg'))]
@@ -189,17 +272,38 @@ def main():
                     st.write(image)
                     st.image(f'{prediction_result_folder}/{image}', caption="Uploaded Image", use_column_width=True)
 
+                st.info("Result")
+                st.write(f"Predicted Value: {predicted_value}, Class: {class_object}, UUID:{session_id}")
+
+                st.info("Verify your prediction result")
+                # agree = st.checkbox("I agree")
+                # time.sleep(10)
+                # if agree:
+                #     st.info("Great!")
+                # else:
+                #   st.info("Need to correct result !")
+
+                # truth_var = None
+                # if "index" not in st.session_state:
+                #     st.session_state.index = 0
+                #
+                # while truth_var is None:
+                #     truth_var = st.number_input("Insert a number",  value=None,  placeholder="Type a number...", key={st.session_state.truth_index})
+                #     if truth_var is not None:
+                #         st.write("The current number is ", truth_var)
+                #         # Increment the index
+                #         st.session_state.index += 1
+
+                # truth_var = st.number_input("Insert a number", placeholder="Type a number...")
+                # time.sleep(10)
+                # if truth_var is not None:
+                #     st.write("The current number is ", truth_var)
+                # else:
+                #     st.write("Again")
+
     else:
         st.subheader("About")
-        st.info("Testing Streamlit app")
-        session_id = str(uuid.uuid4())
-        st.write("Performing detection for session:  " + session_id)
-        training_result_path = "waste-detection/training_results/"  # Specify the path to your directory here
-        selected_model = st.selectbox("Select a folder", get_trained_model(training_result_path))  # choose model format  train_<numb>batch_<numb>epoch
-        st.write(f"You selected: {selected_model}")
-        yolo = YOLO(f'{training_result_path}{selected_model}/weights/best.pt')
-        detection = yolo.predict(source='uploads', save=True, conf=0.01,project='runs/detect')  # Save predictions in session folder
-
+        st.info("Web app")
 
 if __name__ == '__main__':
     main()
