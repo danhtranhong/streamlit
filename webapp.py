@@ -1,7 +1,5 @@
 import streamlit as st
 import os
-import tkinter as tk
-from tkinter import filedialog
 
 import subprocess
 import uuid
@@ -40,7 +38,7 @@ def save_uploaded_file(uploaded_file, session_uuid):
 
 def connect_to_db():
     connection = psycopg2.connect(
-        # host='database-1.chqug9auzx3l.us-east-1.rds.amazonaws.com',
+        # host='rds ??',
         host='localhost',
         port=5432,
         database='capstone',
